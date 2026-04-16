@@ -17,11 +17,14 @@ const initialTransactions = [
   { id: uuidv4(), date: getInitialDate(1), amount: 50, category: 'Entertainment', type: 'expense' },
 ];
 
+const ADMIN_PIN = '1234';
+
 export const useStore = create(
   persist(
     (set) => ({
       transactions: initialTransactions,
-      role: 'admin', // 'admin' | 'viewer'
+      role: 'viewer', // 'admin' | 'viewer'
+      adminUnlocked: false,
       theme: 'light',
       filters: {
         search: '',
@@ -39,7 +42,20 @@ export const useStore = create(
           transactions: state.transactions.filter((t) => t.id !== id),
         })),
 
-      setRole: (role) => set({ role }),
+      setRole: (role) =>
+        set((state) => {
+          if (role === 'admin') return { role: 'admin', adminUnlocked: true };
+          return { role: 'viewer', adminUnlocked: false };
+        }),
+
+      unlockAdmin: (pin) => {
+        const isValid = pin === ADMIN_PIN;
+        if (!isValid) return false;
+        set({ role: 'admin', adminUnlocked: true });
+        return true;
+      },
+
+      lockAdmin: () => set({ role: 'viewer', adminUnlocked: false }),
       
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
 

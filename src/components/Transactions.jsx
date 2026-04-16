@@ -3,17 +3,16 @@ import { useStore } from '../store/useStore';
 import { Plus, Trash2, Search, Filter, ArrowUpDown, Download, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
-const CATEGORIES = ['Salary', 'Rent', 'Food', 'Utilities', 'Entertainment', 'Transportation', 'Healthcare', 'Side Hustle', 'Other'];
-
 export default function Transactions() {
   const { transactions, addTransaction, deleteTransaction, role, filters, setFilters } = useStore();
   const [showAddForm, setShowAddForm] = useState(false);
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   
   // Local state for add form
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     amount: '',
-    category: 'Food',
+    vendor: '',
     type: 'expense'
   });
 
@@ -24,19 +23,20 @@ export default function Transactions() {
     addTransaction({
       date: formData.date,
       amount: parseFloat(formData.amount),
-      category: formData.category,
+      vendor: formData.vendor.trim(),
+      category: 'Uncategorized',
       type: formData.type
     });
     
-    setFormData(prev => ({ ...prev, amount: '' }));
+    setFormData(prev => ({ ...prev, amount: '', vendor: '' }));
     setShowAddForm(false);
   };
 
   const handleExportCSV = () => {
-    const headers = ['Date', 'Amount', 'Category', 'Type'];
+    const headers = ['Date', 'Amount', 'Vendor', 'Type'];
     const csvContent = [
       headers.join(','),
-      ...filteredAndSorted.map(t => `${t.date},${t.amount},${t.category},${t.type}`)
+      ...filteredAndSorted.map(t => `${t.date},${t.amount},${t.vendor || ''},${t.type}`)
     ].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -50,10 +50,17 @@ export default function Transactions() {
   };
 
   const filteredAndSorted = useMemo(() => {
-    return transactions
+    const visibleTransactions = role === 'viewer'
+      ? transactions.filter((t) => t.date === today)
+      : transactions;
+
+    return visibleTransactions
       .filter(t => {
-        const matchesSearch = t.category.toLowerCase().includes(filters.search.toLowerCase()) || 
-                              t.amount.toString().includes(filters.search);
+        const searchValue = filters.search.trim().toLowerCase();
+        const matchesSearch = searchValue === '' ||
+          t.date.includes(searchValue) ||
+          t.amount.toString().includes(searchValue) ||
+          (t.vendor || '').toLowerCase().includes(searchValue);
         const matchesType = filters.type === 'all' || t.type === filters.type;
         return matchesSearch && matchesType;
       })
@@ -66,32 +73,54 @@ export default function Transactions() {
           default: return 0;
         }
       });
-  }, [transactions, filters]);
+  }, [transactions, filters, role, today]);
 
   return (
     <div className="space-y-6">
       {/* Actions & Filters Header */}
-      <div className="glass-panel p-4 rounded-2xl flex flex-col lg:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          {/* Search */}
+      <div className="glass-panel p-4 rounded-2xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Recent Transactions</h2>
+            <p className="text-sm text-muted-foreground">Search, filter, and add new records.</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+              {role === 'admin' && (
+              <button 
+                onClick={handleExportCSV}
+                className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 border border-border bg-background rounded-xl text-sm font-semibold hover:bg-muted transition-colors"
+              >
+                <Download className="w-4 h-4" /> Export
+              </button>
+            )}
+            <button 
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> Add Record
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <input 
               type="text"
-              placeholder="Search..."
+              placeholder="Search date, amount, or vendor..."
               value={filters.search}
               onChange={(e) => setFilters({ search: e.target.value })}
-              className="pl-9 pr-4 py-2 w-full sm:w-48 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              className="pl-9 pr-4 py-2 w-full bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
             />
           </div>
-          
-          {/* Filter Type */}
+
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <select 
               value={filters.type}
               onChange={(e) => setFilters({ type: e.target.value })}
-              className="pl-9 pr-8 py-2 w-full sm:w-auto bg-background border border-border rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+              className="pl-9 pr-8 py-2 w-full bg-background border border-border rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
             >
               <option value="all">All Types</option>
               <option value="income">Income Only</option>
@@ -99,13 +128,12 @@ export default function Transactions() {
             </select>
           </div>
 
-          {/* Sort */}
           <div className="relative">
             <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <select 
               value={filters.sort}
               onChange={(e) => setFilters({ sort: e.target.value })}
-              className="pl-9 pr-8 py-2 w-full sm:w-auto bg-background border border-border rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+              className="pl-9 pr-8 py-2 w-full bg-background border border-border rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>
@@ -114,28 +142,10 @@ export default function Transactions() {
             </select>
           </div>
         </div>
-
-        <div className="flex items-center gap-3 w-full lg:w-auto">
-          <button 
-            onClick={handleExportCSV}
-            className="flex-1 lg:flex-none flex justify-center items-center gap-2 px-4 py-2 border border-border bg-background rounded-xl text-sm font-semibold hover:bg-muted transition-colors"
-          >
-            <Download className="w-4 h-4" /> Export
-          </button>
-          
-          {role === 'admin' && (
-            <button 
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="flex-1 lg:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Add Record
-            </button>
-          )}
-        </div>
       </div>
 
-      {/* Add Transaction Form (Admin) */}
-      {showAddForm && role === 'admin' && (
+      {/* Add Transaction Form */}
+      {showAddForm && (
         <div className="glass-panel p-6 rounded-2xl animate-in slide-in-from-top-4 fade-in duration-300 border-primary/20">
           <h3 className="text-lg font-bold mb-4">Add New Transaction</h3>
           <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
@@ -149,7 +159,7 @@ export default function Transactions() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Amount ($)</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Amount (₹)</label>
               <input 
                 type="number" step="0.01" min="0" required 
                 placeholder="0.00"
@@ -159,14 +169,14 @@ export default function Transactions() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Category</label>
-              <select 
-                value={formData.category}
-                onChange={e => setFormData({...formData, category: e.target.value})}
-                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
-              >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Vendor</label>
+              <input 
+                type="text"
+                placeholder="Title or Vendor"
+                value={formData.vendor}
+                onChange={e => setFormData({...formData, vendor: e.target.value})}
+                className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary/50 outline-none"
+              />
             </div>
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Type</label>
@@ -196,7 +206,7 @@ export default function Transactions() {
             <thead>
               <tr className="bg-muted/50 border-b border-border">
                 <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Date</th>
-                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Category</th>
+                <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Vendor</th>
                 <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Amount</th>
                 {role === 'admin' && <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-center w-24">Action</th>}
               </tr>
@@ -208,14 +218,12 @@ export default function Transactions() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       {format(parseISO(transaction.date), 'MMM dd, yyyy')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-secondary text-secondary-foreground">
-                        {transaction.category}
-                      </span>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                      {transaction.vendor || '—'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-bold">
                       <span className={transaction.type === 'income' ? 'text-emerald-500' : 'text-foreground'}>
-                        {transaction.type === 'income' ? '+' : '-'}${transaction.amount.toLocaleString()}
+                        {transaction.type === 'income' ? '+' : '-'}₹{transaction.amount.toLocaleString()}
                       </span>
                     </td>
                     {role === 'admin' && (
