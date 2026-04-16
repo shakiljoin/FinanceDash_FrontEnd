@@ -230,7 +230,7 @@ export default function Transactions() {
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <button 
                           onClick={() => deleteTransaction(transaction.id)}
-                          className="p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          className="p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors opacity-100 focus:outline-none focus:ring-2 focus:ring-destructive/40"
                           title="Delete transaction"
                         >
                           <Trash2 className="w-4 h-4" />
