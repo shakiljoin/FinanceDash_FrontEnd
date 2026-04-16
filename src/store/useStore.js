@@ -42,6 +42,13 @@ export const useStore = create(
           transactions: state.transactions.filter((t) => t.id !== id),
         })),
 
+      editTransaction: (id, updates) =>
+        set((state) => ({
+          transactions: state.transactions.map((transaction) =>
+            transaction.id === id ? { ...transaction, ...updates } : transaction
+          ),
+        })),
+
       setRole: (role) =>
         set((state) => {
           if (role === 'admin') return { role: 'admin', adminUnlocked: true };

@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Plus, Trash2, Search, Filter, ArrowUpDown, Download, Check } from 'lucide-react';
+import { Plus, Trash2, Edit3, Search, Filter, ArrowUpDown, Download, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 export default function Transactions() {
-  const { transactions, addTransaction, deleteTransaction, role, filters, setFilters } = useStore();
+  const { transactions, addTransaction, deleteTransaction, editTransaction, role, filters, setFilters } = useStore();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState(null);
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   
   // Local state for add form
@@ -16,20 +17,49 @@ export default function Transactions() {
     type: 'expense'
   });
 
-  const handleAdd = (e) => {
+  const handleFormSubmit = (e) => {
     e.preventDefault();
     if (!formData.amount || isNaN(formData.amount)) return;
-    
-    addTransaction({
+
+    const transactionPayload = {
       date: formData.date,
       amount: parseFloat(formData.amount),
       vendor: formData.vendor.trim(),
       category: 'Uncategorized',
       type: formData.type
-    });
-    
-    setFormData(prev => ({ ...prev, amount: '', vendor: '' }));
+    };
+
+    if (editingTransactionId) {
+      editTransaction(editingTransactionId, transactionPayload);
+    } else {
+      addTransaction(transactionPayload);
+    }
+
+    setFormData((prev) => ({ ...prev, amount: '', vendor: '', type: 'expense' }));
     setShowAddForm(false);
+    setEditingTransactionId(null);
+  };
+
+  const handleEdit = (transaction) => {
+    setFormData({
+      date: transaction.date,
+      amount: transaction.amount.toString(),
+      vendor: transaction.vendor || '',
+      type: transaction.type
+    });
+    setEditingTransactionId(transaction.id);
+    setShowAddForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTransactionId(null);
+    setShowAddForm(false);
+    setFormData({
+      date: today,
+      amount: '',
+      vendor: '',
+      type: 'expense'
+    });
   };
 
   const handleExportCSV = () => {
@@ -147,8 +177,10 @@ export default function Transactions() {
       {/* Add Transaction Form */}
       {showAddForm && (
         <div className="glass-panel p-6 rounded-2xl animate-in slide-in-from-top-4 fade-in duration-300 border-primary/20">
-          <h3 className="text-lg font-bold mb-4">Add New Transaction</h3>
-          <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+          <h3 className="text-lg font-bold mb-4">
+            {editingTransactionId ? 'Edit Transaction' : 'Add New Transaction'}
+          </h3>
+          <form onSubmit={handleFormSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Date</label>
               <input 
@@ -189,12 +221,23 @@ export default function Transactions() {
                 <option value="expense">Expense</option>
               </select>
             </div>
-            <button 
-              type="submit"
-              className="flex justify-center items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-colors shadow-sm"
-            >
-              <Check className="w-4 h-4" /> Save
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                type="submit"
+                className="flex justify-center items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold hover:bg-emerald-600 transition-colors shadow-sm"
+              >
+                <Check className="w-4 h-4" /> {editingTransactionId ? 'Update' : 'Save'}
+              </button>
+              {editingTransactionId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 rounded-xl border border-border bg-background text-sm font-semibold text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </form>
         </div>
       )}
@@ -228,13 +271,22 @@ export default function Transactions() {
                     </td>
                     {role === 'admin' && (
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button 
-                          onClick={() => deleteTransaction(transaction.id)}
-                          className="p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors opacity-100 focus:outline-none focus:ring-2 focus:ring-destructive/40"
-                          title="Delete transaction"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="inline-flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleEdit(transaction)}
+                            className="p-2 text-muted-foreground hover:bg-primary/10 hover:text-primary rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            title="Edit transaction"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => deleteTransaction(transaction.id)}
+                            className="p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-destructive/40"
+                            title="Delete transaction"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
